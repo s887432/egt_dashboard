@@ -23,6 +23,12 @@
 #define ENABLE_UART
 #define ENABLE_CAN
 
+
+// need to modify manually
+#define BACKGROUND_OFFSET	2
+#define NAVIGATION_LEFT		0
+#define NAVIGATION_RIGHT	1
+
 // ********************************************************************************************************
 #ifdef ENABLE_CAN
 // ********************************************************************************************************
@@ -133,6 +139,11 @@ size_t getFileSize(const char *fileName) {
 
 int main(int argc, char** argv)
 {
+	std::shared_ptr<egt::experimental::GaugeLayer> naviLeft;
+	std::shared_ptr<egt::experimental::GaugeLayer> naviRight;
+	
+	bool isUpdated = false;
+	
 #ifdef ENABLE_CAN
 	int canFd = -1;
 	int nCanReadBytes;
@@ -223,7 +234,15 @@ int main(int argc, char** argv)
     auto DeserialNeedles = [&]()
     {
         //Background image and needles should be de-serialized firstly before main() return
-        motordash.AddWidgetByBuf((const u8*)buff_ptr+offset_table[0].offset, offset_table[0].len, true);
+        motordash.AddWidgetByBuf((const u8*)buff_ptr+offset_table[BACKGROUND_OFFSET].offset, offset_table[BACKGROUND_OFFSET].len, true);
+        
+        naviLeft = motordash.AddWidgetByBuf((const u8*)buff_ptr+offset_table[NAVIGATION_LEFT].offset, offset_table[NAVIGATION_LEFT].len, true);
+        naviRight = motordash.AddWidgetByBuf((const u8*)buff_ptr+offset_table[NAVIGATION_RIGHT].offset, offset_table[NAVIGATION_RIGHT].len, true);
+        
+        naviLeft->move(egt::Point(136, 221));
+        naviRight->move(egt::Point(136, 221));
+        naviLeft->hide();
+        naviRight->hide();
     };
 
     DeserialNeedles();
@@ -279,6 +298,19 @@ int main(int argc, char** argv)
 						case COMMAND_NAVI_DIRECTION:
 							bleNaviReconstruct(cmdBuff, &naviInfo);
 							printf("distance=%d, direction=%d\r\n", naviInfo.distance, naviInfo.direction);
+							switch( naviInfo.direction )
+							{
+								case NAVIDIR_LEFT:
+									naviLeft->show();
+									isUpdated = true;
+									break;
+								case NAVIDIR_RIGHT:
+									naviRight->show();
+									isUpdated = true;
+									break;
+								default:
+									break;
+							}
 							break;
 							
 						default:
@@ -291,10 +323,25 @@ int main(int argc, char** argv)
 #endif // end of ENABLE_UART    	
     	
     	count++;
-		if( count >= 100)
+		if( count >= 300)
 		{
-			std::cout<<"timeout"<<std::endl;
+			//std::cout<<"timeout"<<std::endl;
 			count=1;
+			
+			if( isUpdated )
+			{
+				if( naviLeft->visible() )
+				{
+					naviLeft->hide();
+				}
+				
+				if( naviRight->visible() )
+				{
+					naviRight->hide();
+				}
+			
+				isUpdated = false;
+			}
 		}
     });
     timer.start();
@@ -620,4 +667,3 @@ static int canInit(char *canName)
 #endif // end of ENABLE_CAN
 
 // end of file
-
